@@ -8,8 +8,6 @@ import java.util.List;
 
 public class DB_UserDAO implements DB_IUserDAO {
 
-    //TODO Kontroller at det fungerer korrekt med 'roles', altså List. Ryd op i de udkommenterede 'role' kald hvis det fungerer med List
-
     private final String dbURL = "jdbc:mysql://ec2-52-30-211-3.eu-west-1.compute.amazonaws.com/s185125?";
     private final String dbUsername = "s185125";
     private final String dbPassword = "rhMBx6R8LwiFriAQfbkLz";
@@ -37,8 +35,8 @@ public class DB_UserDAO implements DB_IUserDAO {
 
             connection.close();
         } catch (SQLException e) {
-            e.printStackTrace();
-        } return null;
+            throw new DALException(e.getMessage());
+        } return null; //If user doesn't exists
     }
 
     @Override
@@ -53,7 +51,6 @@ public class DB_UserDAO implements DB_IUserDAO {
             while(resultSet.next()){
                 M_UserDTO tempUser = new M_UserDTO(resultSet.getInt(1), resultSet.getString(2),
                         resultSet.getString(3), resultSet.getString(4), resultSet.getString(5),
-//                        getUserRoles(resultSet, 6));
                         getUserRoles(connection, resultSet.getInt(0))); //FixMe Roles
                 list.add(tempUser);
             }
@@ -62,10 +59,8 @@ public class DB_UserDAO implements DB_IUserDAO {
             return list;
 
         } catch (SQLException e) {
-            //Remember to handle Exceptions gracefully! Connection might be Lost....
-            e.printStackTrace();
+            throw new DALException(e.getMessage());
         }
-        return null;
     }
 
     private List<String> getUserRoles(Connection c, int userId) throws SQLException {
@@ -93,14 +88,12 @@ public class DB_UserDAO implements DB_IUserDAO {
             preparedStmt.setString(3,user.getIni());
             preparedStmt.setString(4,user.getUserName());
             preparedStmt.setString(5,user.getPassword());
-//            preparedStmt.setString(6,user.getRole());
             preparedStmt.execute();
             setUserRoles(connection, user.getRoles(), user.getUserId(), true);
 
             connection.close();
         } catch (SQLException e) {
-            //Remember to handle Exceptions gracefully! Connection might be Lost....
-            e.printStackTrace();
+            throw new DALException(e.getMessage());
         }
     }
 
@@ -122,59 +115,13 @@ public class DB_UserDAO implements DB_IUserDAO {
 
             connection.close();
         } catch (SQLException e) {
-            //Remember to handle Exceptions gracefully! Connection might be Lost....
-            e.printStackTrace();
+            throw new DALException(e.getMessage());
         }
     }
 
-//    private void setUserRoles(PreparedStatement preparedStmt, List<String> roleList, int index) throws SQLException { //FixMe Get metadata and control with input
-//        StringBuilder roles = new StringBuilder();
-//        for (String role : roleList) {
-//            roles.append(role).append(" ");
-//        }
-//        preparedStmt.setString(index, roles.toString());
-//    }
-
-//    private void setUserRoles(Connection c, List<String> roleList, int userId, boolean newUser) throws SQLException {
-//        List<Integer> roles = new ArrayList<>();
-//        if(roleList.contains("Admin")) {
-//            roles.add(1);
-//        } else {
-//            roles.add(0);
-//        }
-//        if(roleList.contains("Pharmacist")) {
-//            roles.add(1);
-//        } else {
-//            roles.add(0);
-//        }
-//        if(roleList.contains("Foreman")) {
-//            roles.add(1);
-//        } else {
-//            roles.add(0);
-//        }
-//        if(roleList.contains("Operator")) {
-//            roles.add(1);
-//        } else {
-//            roles.add(0);
-//        }
-//
-//        if(newUser) {
-//            createUserRoles(c, roles, userId);
-//        } else {
-//            updateUserRoles(c, roles, userId);
-//        }
-//    }
-//    private void setUserRoles(Connection c, List<String> roleList, int userId, boolean newUser) throws SQLException {
-//        if(newUser) {
-//            createUserRoles(c, roleList, userId);
-//        } else {
-//            System.out.println("Der skal laves en ny en din spade!");
-//        }
-//    }
-
     private void setUserRoles(Connection c, List<String> roles, int userId, boolean newUser) throws SQLException {
         //Start query statement
-        String query = "";
+        String query;
         if(newUser) {
             query = "INSERT INTO UserRoles VALUES(?";
         } else {
@@ -199,22 +146,21 @@ public class DB_UserDAO implements DB_IUserDAO {
         //Finish query statement
         if(newUser) {
             for(int i = 2 ; i <= columnCount ; i++) { //Skips 1st column, which is 'userId'
-                query += ", ?"; //FixMe Striiiing buildeeer?
+                query += ", ?"; //FixMe Stringbuilder
             }
             query += ")";
         } else {
             for(int i = 0 ; i < columnCount ; i++) {
                 if(i == 0) {
-                    query += possibleRoles.get(i) + " = ?"; //FixMe Striiing buildeeer?
+                    query += possibleRoles.get(i) + " = ?"; //FixMe Stringbuilder
                 } else {
-                    query += ", " + possibleRoles.get(i) + " = ?"; //FixMe Striiing buildeeer?
+                    query += ", " + possibleRoles.get(i) + " = ?"; //FixMe Stringbuilder
                 }
             }
             query += " WHERE userId = ?";
-//            query += " WHERE userId = " + userId;
         }
 
-        //Setup prepared statement
+        //Setup prepared statement and execute
         PreparedStatement preparedStmt = c.prepareStatement(query);
         preparedStmt.setInt(1, userId);
         for(int i = 2 ; i <= columnCount ; i++) { //Skips 1st column, which is 'userId'
@@ -233,19 +179,6 @@ public class DB_UserDAO implements DB_IUserDAO {
         preparedStmt.execute();
     }
 
-//    private void updateUserRoles(Connection c, List<Integer> roles, int userId) throws SQLException {
-//        String query = "UPDATE UserRoles SET administrator = ?, pharmacist = ?, foreman = ?, operator= ? WHERE userID = ? " + userId;
-//        PreparedStatement preparedStmt = c.prepareStatement(query);
-//
-//        preparedStmt.setInt(1, roles.get(0));
-//        preparedStmt.setInt(2, roles.get(1));
-//        preparedStmt.setInt(3, roles.get(2));
-//        preparedStmt.setInt(4, roles.get(3));
-//        preparedStmt.setInt(5, userId);
-//
-//        preparedStmt.executeUpdate();
-//    }
-
     @Override
     public void deleteUser(int userId) throws DALException {
         try {
@@ -258,8 +191,7 @@ public class DB_UserDAO implements DB_IUserDAO {
 
             connection.close();
         } catch (SQLException e) {
-            //Remember to handle Exceptions gracefully! Connection might be Lost....
-            e.printStackTrace();
+            throw new DALException(e.getMessage());
         }
     }
 }
