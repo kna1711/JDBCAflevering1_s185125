@@ -23,39 +23,39 @@ public class DB_UserDAO implements DB_IUserDAO {
     @Override
     public M_UserDTO getUser(int userId) throws DALException {
         try {
-            Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("SELECT * FROM User WHERE userID = " + userId);
+            Connection c = getConnection();
+            String query = "SELECT * FROM User WHERE userID = ?";
+            PreparedStatement pStm = c.prepareStatement(query);
+            pStm.setInt(1, userId);
+
+            ResultSet resultSet = pStm.executeQuery();
 
             if(resultSet.next()) {
                 return new M_UserDTO(resultSet.getInt(1), resultSet.getString(2), resultSet.getString(3), resultSet.getString(4),
                         resultSet.getString(5),
-                        getUserRoles(connection, userId));
+                        getUserRoles(c, userId));
             }
 
-            connection.close();
+            c.close();
         } catch (SQLException e) {
             throw new DALException(e.getMessage());
         } return null; //If user doesn't exists
     }
 
     @Override
-    public List<M_UserDTO> getUserList() throws DALException {
+    public List<M_UserDTO> getUserList() throws DALException { //TODO Create test (minor priority: If getUser(id) works, this should work)
         List<M_UserDTO> list = new ArrayList<M_UserDTO>();
 
         try {
-            Connection connection = getConnection();
-            Statement statement = connection.createStatement();
-            ResultSet resultSet = statement.executeQuery("SELECT * FROM User");
+            Connection c = getConnection();
+            Statement stm = c.createStatement();
+            ResultSet rs = stm.executeQuery("SELECT userId FROM User");
 
-            while(resultSet.next()){
-                M_UserDTO tempUser = new M_UserDTO(resultSet.getInt(1), resultSet.getString(2),
-                        resultSet.getString(3), resultSet.getString(4), resultSet.getString(5),
-                        getUserRoles(connection, resultSet.getInt(0))); //FixMe Roles
-                list.add(tempUser);
+            for(int i = 0 ; rs.next() ; i++) {
+                M_UserDTO user = getUser(rs.getInt(i++));
+                list.add(user);
             }
-
-            connection.close();
+            c.close();
             return list;
 
         } catch (SQLException e) {
@@ -65,7 +65,12 @@ public class DB_UserDAO implements DB_IUserDAO {
 
     private List<String> getUserRoles(Connection c, int userId) throws SQLException {
         List<String> roles = new ArrayList<>();
-        ResultSet rs = c.createStatement().executeQuery("SELECT * FROM UserRoles WHERE userId = " + userId);
+
+        String query = "SELECT * FROM UserRoles WHERE userId = ?";
+        PreparedStatement pStm = c.prepareStatement(query);
+        pStm.setInt(1, userId);
+        ResultSet rs = pStm.executeQuery();
+
         if(rs.next()) {
             for (int i = 2 ; i <= rs.getMetaData().getColumnCount() ; i++) {
                 if(rs.getBoolean(i)) {
@@ -101,7 +106,7 @@ public class DB_UserDAO implements DB_IUserDAO {
     public void updateUser(M_UserDTO user) throws DALException {
         try {
             Connection connection = getConnection();
-            String query = "UPDATE User SET cpr = ?, initials = ?, userName = ?, password = ? WHERE userID = ? "; //TODO Kontroller at man ikke kan skrifte ID, ellers skal der være en db_id
+            String query = "UPDATE User SET cpr = ?, initials = ?, userName = ?, password = ? WHERE userID = ? ";
             PreparedStatement preparedStmt = connection.prepareStatement(query);
 
             preparedStmt.setString(1, user.getCpr());
@@ -157,7 +162,7 @@ public class DB_UserDAO implements DB_IUserDAO {
                     query += ", " + possibleRoles.get(i) + " = ?"; //FixMe Stringbuilder
                 }
             }
-            query += " WHERE userId = ?";
+            query += " WHERE userId = ?"; //FixMe Stringbuilder
         }
 
         //Setup prepared statement and execute
